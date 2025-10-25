@@ -1,8 +1,12 @@
 import { SignIn, SignUp, useUser } from '@clerk/clerk-react';
- import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import Home from "./pages/Home"
 import UserForm from "./pages/UserForm"
-import AutoFill from "./pages/AutoFill";
+import React from 'react';
+import {BrowserRouter} from 'react-router-dom';
+import Header from './components/Header';
+import AutoFillPage from './pages/AutoFillPage';
+import UserProfile from './pages/UserProfile';
 import { Toaster } from "react-hot-toast";
 
 function ProtectedRoute({ children }) {
@@ -13,6 +17,7 @@ function ProtectedRoute({ children }) {
 
   return children;
 }
+
 
 function App() {
 
@@ -43,7 +48,7 @@ function App() {
           {/* protected routes */}
           <Route path="/auto-fill" element={
             <ProtectedRoute>
-              <AutoFill />
+              <AutoFillPage />
             </ProtectedRoute>
           } />
 

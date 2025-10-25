@@ -1,52 +1,66 @@
 // backend/controllers/autofillController.js
+import User from '../models/User.js';
+import * as playwrightService from '../services/playwrightService.js';
 
-const User = require('../models/User');
-const { startAndFillForm, submitFilledForm } = require('../services/playwrightService');
-const crypto = require('crypto'); // Built-in Node.js module
+export async function start(req, res) {
+  try {
+    const { formUrl, userId, headless = false } = req.body;
+    if (!formUrl || !userId) return res.status(400).json({ error: 'formUrl and userId required' });
 
-// This function starts the process
-exports.initiateAutofill = async (req, res) => {
-    try {
-        const { formUrl, userEmail } = req.body;
+    const user = await User.findById(userId).lean();
+    if (!user) return res.status(404).json({ error: 'User not found' });
 
-        // 1. Fetch user data from MongoDB
-        const userData = await User.findOne({ email: userEmail }).lean();
-        if (!userData) {
-            return res.status(404).json({ message: 'User not found.' });
-        }
+    const userKey = user.clerkId || user._id;
+    const result = await playwrightService.startAutofill({ userKey, formUrl, userProfile: user, headless });
+    return res.json(result);
+  } catch (err) {
+    console.error('autofill start error', err);
+    return res.status(500).json({ error: err.message, stack: err.stack ? String(err.stack) : undefined });
+  }
+}
 
-        // 2. Generate a unique session ID for this request
-        const sessionId = crypto.randomBytes(16).toString('hex');
-        
-        // 3. Start the Playwright service (this will run in the background)
-        const filledData = await startAndFillForm(formUrl, userData, sessionId);
+export async function continueAutofill(req, res) {
+  try {
+    const { sessionId, userId } = req.body;
+    if (!sessionId || !userId) return res.status(400).json({ error: 'sessionId and userId required' });
 
-        // 4. Respond to the frontend immediately with the session ID
-        res.status(200).json({ 
-            message: 'Form has been filled! Please review and confirm submission.',
-            sessionId: sessionId,
-            filledFields: filledData.map(f => f.label) // Send back what was filled
-        });
+    const user = await User.findById(userId).lean();
+    if (!user) return res.status(404).json({ error: 'User not found' });
 
-    } catch (error) {
-        console.error('Error during autofill initiation:', error);
-        res.status(500).json({ message: 'Failed to autofill form.', error: error.message });
-    }
-};
+    const result = await playwrightService.continueAutofill(sessionId, user);
+    return res.json(result);
+  } catch (err) {
+    console.error('autofill continue error', err);
+    return res.status(500).json({ error: err.message, stack: err.stack ? String(err.stack) : undefined });
+  }
+}
 
-// This function completes the process
-exports.confirmAndSubmit = async (req, res) => {
-    try {
-        const { sessionId } = req.body;
-        if (!sessionId) {
-            return res.status(400).json({ message: 'Session ID is required.' });
-        }
+export async function confirmSubmission(req, res) {
+  try {
+    const { sessionId } = req.body;
+    if (!sessionId) return res.status(400).json({ error: 'sessionId required' });
 
-        const result = await submitFilledForm(sessionId);
-        res.status(200).json(result);
+    const result = await playwrightService.submitAutofill(sessionId);
+    return res.json(result);
+  } catch (err) {
+    console.error('autofill submit error', err);
+    return res.status(500).json({ error: err.message, stack: err.stack ? String(err.stack) : undefined });
+  }
+}
 
-    } catch (error) {
-        console.error('Error during form submission:', error);
-        res.status(500).json({ message: 'Failed to submit form.', error: error.message });
-    }
-};
+/**
+ * cleanup - cancel/close the browser session associated with sessionId
+ * exported because routes/autofillRoutes.js imports it
+ */
+export async function cleanup(req, res) {
+  try {
+    const { sessionId } = req.body;
+    if (!sessionId) return res.status(400).json({ error: 'sessionId required' });
+
+    const result = await playwrightService.cancelSession(sessionId);
+    return res.json(result);
+  } catch (err) {
+    console.error('autofill cleanup error', err);
+    return res.status(500).json({ error: err.message, stack: err.stack ? String(err.stack) : undefined });
+  }
+}

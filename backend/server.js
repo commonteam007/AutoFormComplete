@@ -1,30 +1,38 @@
-import express from "express";
-import connectDB from "./db.js";
-import cors from "cors";
-import dotenv from "dotenv";
-import userRoutes from "./routes/userRoutes.js";
-import { ClerkExpressRequireAuth } from "@clerk/clerk-sdk-node";
+// backend/server.js
 
-
+import dotenv from 'dotenv';
 dotenv.config();
 
+import express from 'express';
+import cors from 'cors';
+import connectDB from './db.js';
+import userRoutes from './routes/userRoutes.js';
+import autofillRoutes from './routes/autofillRoutes.js';
+
+// Clerk middleware
+import { ClerkExpressRequireAuth } from '@clerk/clerk-sdk-node';
+
 const app = express();
-app.use(cors(
-  {
-  origin: "http://localhost:5173", // or whatever your React dev server runs on
-  credentials: true
-}
-));
 app.use(express.json());
+app.use(cors({
+  origin: process.env.FRONTEND_ORIGIN || 'http://localhost:5173',
+  credentials: true
+}));
 
-// db connection
-connectDB();
+(async () => {
+  try {
+    await connectDB();
 
-// routes
-app.use("/api/users", ClerkExpressRequireAuth(), userRoutes);
+    // User routes (protected)
+    app.use('/api/users', ClerkExpressRequireAuth(), userRoutes);
 
-// server initialization
-let PORT = process.env.PORT;
-app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+    // Autofill routes (can be public or protected)
+    app.use('/api/autofill', autofillRoutes); // <-- FIXED MOUNT PATH
 
-
+    const PORT = process.env.PORT || 5000;
+    app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+  } catch (err) {
+    console.error('Server startup error', err);
+    process.exit(1);
+  }
+})();
